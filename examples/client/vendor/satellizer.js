@@ -550,38 +550,120 @@ var Popup = (function () {
     Popup.prototype.polling = function (redirectUri) {
         var _this = this;
         return this.$q(function (resolve, reject) {
+            _this.$window.postMessage({
+                type: 'ROBIN_SSO_BREADCRUMB',
+                message: 'Starting poll.',
+                source: 'satellizer'
+            }, '*');
             var redirectUriParser = document.createElement('a');
             redirectUriParser.href = redirectUri;
             var redirectUriPath = getFullUrlPath(redirectUriParser);
+            var intervalState = 0;
             var polling = _this.$interval(function () {
+                var shouldLogInThisIteration = intervalState % 5 === 0;
+                intervalState += 1;
+                if (shouldLogInThisIteration) {
+                    // Log this breadcrumb every 2.5 seconds.
+                    _this.$window.postMessage({
+                        type: 'ROBIN_SSO_BREADCRUMB',
+                        message: 'Polling.',
+                        source: 'satellizer'
+                    }, '*');
+                }
                 if (!_this.popup || _this.popup.closed || _this.popup.closed === undefined) {
+                    _this.$window.postMessage({
+                        type: 'ROBIN_SSO_BREADCRUMB',
+                        message: 'Popup closed.',
+                        source: 'satellizer'
+                    }, '*');
                     _this.$interval.cancel(polling);
+                    _this.$window.postMessage({
+                        type: 'ROBIN_SSO_BREADCRUMB',
+                        message: 'Interval canceled.',
+                        source: 'satellizer'
+                    }, '*');
+                    _this.$window.postMessage({
+                        type: 'ROBIN_SSO_LOG',
+                        message: 'SSO window was closed.',
+                        source: 'satellizer'
+                    }, '*');
                     reject(new Error('The popup window was closed'));
                 }
                 try {
                     var popupWindowPath = getFullUrlPath(_this.popup.location);
                     if (popupWindowPath === redirectUriPath) {
+                        _this.$window.postMessage({
+                            type: 'ROBIN_SSO_BREADCRUMB',
+                            message: 'Redirect URLs match.',
+                            source: 'satellizer'
+                        }, '*');
                         if (_this.popup.location.search || _this.popup.location.hash) {
+                            _this.$window.postMessage({
+                                type: 'ROBIN_SSO_BREADCRUMB',
+                                message: 'Found expected query params.',
+                                source: 'satellizer'
+                            }, '*');
                             var query = parseQueryString(_this.popup.location.search.substring(1).replace(/\/$/, ''));
                             var hash = parseQueryString(_this.popup.location.hash.substring(1).replace(/[\/$]/, ''));
                             var params = angular.extend({}, query, hash);
                             if (params.error) {
                                 reject(new Error(params.error));
+                                _this.$window.postMessage({
+                                    type: 'ROBIN_SSO_BREADCRUMB',
+                                    message: 'SSO window container error argument.',
+                                    error: params.error,
+                                    source: 'satellizer'
+                                }, '*');
                             }
                             else {
                                 resolve(params);
+                                _this.$window.postMessage({
+                                    type: 'ROBIN_SSO_BREADCRUMB',
+                                    message: 'Resolved SSO login.',
+                                    source: 'satellizer'
+                                }, '*');
                             }
                         }
                         else {
+                            _this.$window.postMessage({
+                                type: 'ROBIN_SSO_LOG',
+                                message: 'SSO window did not have query params.',
+                                source: 'satellizer'
+                            }, '*');
                             reject(new Error('OAuth redirect has occurred but no query or hash parameters were found. ' +
                                 'They were either not set during the redirect, or were removed—typically by a ' +
                                 'routing library—before Satellizer could read it.'));
                         }
+                        _this.$window.postMessage({
+                            type: 'ROBIN_SSO_BREADCRUMB',
+                            message: 'Detected redirect.',
+                            source: 'satellizer'
+                        }, '*');
                         _this.$interval.cancel(polling);
+                        _this.$window.postMessage({
+                            type: 'ROBIN_SSO_BREADCRUMB',
+                            message: 'Canceled interval.',
+                            source: 'satellizer'
+                        }, '*');
                         _this.popup.close();
+                        _this.$window.postMessage({
+                            type: 'ROBIN_SSO_LOG',
+                            message: 'Closed SSO window via polling.',
+                            source: 'satellizer'
+                        }, '*');
                     }
                 }
                 catch (error) {
+                    // Ignore DOMException: Blocked a frame with origin from accessing a cross-origin frame.
+                    // A hack to get around same-origin security policy errors in IE.
+                    if (shouldLogInThisIteration) {
+                        _this.$window.postMessage({
+                            type: 'ROBIN_SSO_BREADCRUMB',
+                            message: 'Encountered SSO Polling error.',
+                            error: error ? error.message : undefined,
+                            source: 'satellizer'
+                        }, '*');
+                    }
                 }
             }, 500);
         });
@@ -589,8 +671,26 @@ var Popup = (function () {
     Popup.prototype.eventListener = function (redirectUri) {
         var _this = this;
         return this.$q(function (resolve, reject) {
+            _this.$window.postMessage({
+                type: 'ROBIN_SSO_BREADCRUMB',
+                message: 'Adding event listener.',
+                source: 'satellizer',
+                redirectUri: redirectUri
+            }, '*');
             _this.popup.addEventListener('loadstart', function (event) {
+                _this.$window.postMessage({
+                    type: 'ROBIN_SSO_BREADCRUMB',
+                    message: 'Popup window loading.',
+                    source: 'satellizer'
+                }, '*');
                 if (event.url.indexOf(redirectUri) !== 0) {
+                    _this.$window.postMessage({
+                        type: 'ROBIN_SSO_BREADCRUMB',
+                        message: 'Polling.',
+                        url: event.url,
+                        redirectUri: redirectUri,
+                        source: 'satellizer'
+                    }, '*');
                     return;
                 }
                 var parser = document.createElement('a');
@@ -606,6 +706,11 @@ var Popup = (function () {
                         resolve(params);
                     }
                     _this.popup.close();
+                    _this.$window.postMessage({
+                        type: 'ROBIN_SSO_LOG',
+                        message: 'Closed SSO window via event listener.',
+                        source: 'satellizer'
+                    }, '*');
                 }
             });
             _this.popup.addEventListener('loaderror', function () {
