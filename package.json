@@ -88,5 +88,6 @@
     "sign-in",
     "social",
     "twitch"
-  ]
+  ],
+  "dependencies": {}
 }
